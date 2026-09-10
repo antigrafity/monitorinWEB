@@ -1,0 +1,95 @@
+{# Layout dasar Web Dashboard ContentMonitor: sidebar kiri + konten kanan.
+   Dipakai bersama oleh seluruh halaman (index/overview, websites, pages,
+   changes, website_history, event_detail) sehingga tampilan konsisten.
+   Seluruh aset (CSS/JS) dilayani lokal dari /static sehingga dashboard
+   bekerja tanpa koneksi internet.
+
+   ContentMonitor Tahap 2: link Pages (/pages) dan Content Changes (/changes)
+   sudah aktif. ContentMonitor Tahap 3: link Alerts (/alerts) sudah aktif +
+   badge jumlah unread. ContentMonitor Tahap 5: link Reports (/reports) sudah
+   aktif. Seluruh menu sidebar kini nyata (tidak ada lagi tanda "Segera"). #}
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}ContentMonitor{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app-shell">
+        <aside class="sidebar" aria-label="Navigasi utama">
+            <a class="brand" href="/">
+                <span class="brand-mark" aria-hidden="true">CM</span>
+                <span>ContentMonitor</span>
+            </a>
+            <nav class="sidebar-nav">
+                <a href="/" class="{{ 'active' if active_nav == 'overview' else '' }}"
+                   {% if active_nav == 'overview' %}aria-current="page"{% endif %}>
+                    <span class="nav-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+                    </span>
+                    <span>Overview</span>
+                </a>
+                <a href="/websites" class="{{ 'active' if active_nav == 'websites' else '' }}"
+                   {% if active_nav == 'websites' %}aria-current="page"{% endif %}>
+                    <span class="nav-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 4 6.1 4 9s-1.5 6.3-4 9c-2.5-2.7-4-6.1-4-9s1.5-6.3 4-9z"/></svg>
+                    </span>
+                    <span>Websites</span>
+                </a>
+                <a href="/pages" class="{{ 'active' if active_nav == 'pages' else '' }}"
+                   {% if active_nav == 'pages' %}aria-current="page"{% endif %}>
+                    <span class="nav-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
+                    </span>
+                    <span>Pages</span>
+                </a>
+                <a href="/changes" class="{{ 'active' if active_nav == 'changes' else '' }}"
+                   {% if active_nav == 'changes' %}aria-current="page"{% endif %}>
+                    <span class="nav-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
+                    </span>
+                    <span>Content Changes</span>
+                </a>
+                <a href="/alerts" class="{{ 'active' if active_nav == 'alerts' else '' }}"
+                   {% if active_nav == 'alerts' %}aria-current="page"{% endif %}>
+                    <span class="nav-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a7 7 0 0 0-7 7v4l-2 4h18l-2-4v-4a7 7 0 0 0-7-7z"/><path d="M9.5 21a2.5 2.5 0 0 0 5 0"/></svg>
+                    </span>
+                    <span>Alerts</span>
+                    {% if sidebar_unread_alerts %}
+                    <span class="nav-badge nav-badge-alert">{{ sidebar_unread_alerts }}</span>
+                    {% endif %}
+                </a>
+                <a href="/reports" class="{{ 'active' if active_nav == 'reports' else '' }}"
+                   {% if active_nav == 'reports' %}aria-current="page"{% endif %}>
+                    <span class="nav-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5M10 19V9M16 19v-6M22 19H2"/></svg>
+                    </span>
+                    <span>Reports</span>
+                </a>
+                <a href="/settings" class="{{ 'active' if active_nav == 'settings' else '' }}"
+                   {% if active_nav == 'settings' %}aria-current="page"{% endif %}>
+                    <span class="nav-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    </span>
+                    <span>Settings</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                Interval global bawaan<br>
+                <strong>{{ global_interval_label }}</strong>
+            </div>
+        </aside>
+
+        <div class="app-body">
+            <main class="app-main">
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

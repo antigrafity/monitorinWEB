@@ -1,0 +1,168 @@
+{# Halaman Content Changes ContentMonitor (Tahap 2): daftar SEMUA perubahan
+   konten lintas website dengan 4 kartu KPI (Semua/Ditambahkan/Dihapus/
+   Diperbarui), filter server-side (start/end/website/type/q), pagination,
+   dan empty state yang membedakan "belum ada perubahan" vs "tidak ada hasil
+   untuk filter ini".
+
+   Kolom "Keywords" DILEWATI (fitur Keywords ada di Tahap 4). #}
+{% extends "base.html" %}
+{% set active_nav = 'changes' %}
+
+{% block title %}Content Changes &middot; ContentMonitor{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>Content Changes</h1>
+        <p class="muted small">Daftar seluruh perubahan konten yang terdeteksi di semua website.</p>
+    </div>
+</div>
+
+{% if load_error %}
+<div class="error-state" role="alert">
+    Terjadi kesalahan saat memuat data perubahan. Data tersimpan tidak diubah.
+    Silakan coba lagi beberapa saat lagi.
+</div>
+{% else %}
+
+{% if used_default_range %}
+<div class="warning-state" role="status">
+    Rentang tanggal yang diberikan tidak valid; menampilkan 7 hari terakhir sebagai bawaan.
+</div>
+{% endif %}
+
+{# --- 4 kartu KPI --------------------------------------------------- #}
+<section class="kpi-grid" aria-label="Ringkasan KPI perubahan">
+    <div class="kpi-card" data-kpi="total">
+        <div class="kpi-icon kpi-icon-indigo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
+        </div>
+        <div class="kpi-label">Semua Perubahan</div>
+        <div class="kpi-value" data-kpi-value="total">{{ kpi_total }}</div>
+    </div>
+    <div class="kpi-card" data-kpi="added">
+        <div class="kpi-icon kpi-icon-violet" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
+        </div>
+        <div class="kpi-label">Ditambahkan</div>
+        <div class="kpi-value" data-kpi-value="added">{{ kpi_added }}</div>
+    </div>
+    <div class="kpi-card" data-kpi="removed">
+        <div class="kpi-icon kpi-icon-indigo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14"/></svg>
+        </div>
+        <div class="kpi-label">Dihapus</div>
+        <div class="kpi-value" data-kpi-value="removed">{{ kpi_removed }}</div>
+    </div>
+    <div class="kpi-card" data-kpi="updated">
+        <div class="kpi-icon kpi-icon-violet" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5a7 7 0 1 0 6.32 4M18 3v4h-4"/></svg>
+        </div>
+        <div class="kpi-label">Diperbarui</div>
+        <div class="kpi-value" data-kpi-value="updated">{{ kpi_updated }}</div>
+    </div>
+</section>
+
+<section class="card">
+    <form class="filter-form" method="get" action="/changes">
+        <label class="field">Dari
+            <input type="date" name="start" value="{{ start }}">
+        </label>
+        <label class="field">Sampai
+            <input type="date" name="end" value="{{ end }}">
+        </label>
+        <label class="field">Website
+            <select name="website">
+                <option value="">Semua Website</option>
+                {% for w in websites %}
+                <option value="{{ w.id }}" {% if w.id == website %}selected{% endif %}>{{ w.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label class="field">Tipe
+            <select name="type">
+                <option value="">Semua Tipe</option>
+                <option value="added" {% if type == 'added' %}selected{% endif %}>Added</option>
+                <option value="removed" {% if type == 'removed' %}selected{% endif %}>Removed</option>
+                <option value="updated" {% if type == 'updated' %}selected{% endif %}>Updated</option>
+            </select>
+        </label>
+        <label class="field search-field">Cari
+            <input type="text" name="q" value="{{ q }}" placeholder="Cari URL atau deskripsi...">
+        </label>
+        <button type="submit" class="btn btn-primary">Terapkan</button>
+        <a class="btn" href="/changes">Reset</a>
+    </form>
+
+    {% if not has_any_change_ever %}
+    <div class="empty-state">
+        Belum ada perubahan yang terdeteksi. Perubahan akan muncul di sini
+        setelah crawler menemukan perbedaan konten pada halaman yang dipantau.
+    </div>
+    {% elif rows|length == 0 %}
+    <div class="empty-state">
+        Tidak ada hasil untuk filter ini. Coba perluas rentang tanggal atau
+        ubah kombinasi filter.
+    </div>
+    {% else %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Change</th>
+                    <th scope="col">Page</th>
+                    <th scope="col">Website</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Detected At</th>
+                    <th scope="col">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in rows %}
+                <tr>
+                    <td>
+                        <div class="change-cell">
+                            <span class="badge badge-{{ item.change_type }}">{{ item.change_type|capitalize }}</span>
+                            <div class="change-cell-desc small">{{ item.description }}</div>
+                        </div>
+                    </td>
+                    <td class="mono small">{{ item.event.url }}</td>
+                    <td>
+                        {% if item.website %}
+                        <div class="site-cell">
+                            <span class="avatar" style="background:{{ item.website.domain|avatar_color }}">{{ item.website.domain|avatar_letter }}</span>
+                            <div>
+                                <div class="site-name">{{ item.website.name }}</div>
+                                <div class="site-domain">{{ item.website.domain }}</div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <span class="muted">Website tidak dikenal</span>
+                        {% endif %}
+                    </td>
+                    <td><span class="badge badge-{{ item.change_type }}">{{ item.change_type|capitalize }}</span></td>
+                    <td>{{ item.event.detected_at|fmt_rel }}</td>
+                    <td><a class="btn" href="/events/{{ item.event.id }}">Lihat</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="pagination">
+        <span class="muted small">
+            Showing {{ range_start_idx }} to {{ range_end_idx }} of {{ total_count }} changes
+        </span>
+        <div class="pagination-controls">
+            {% if page > 1 %}
+            <a class="btn" href="/changes?start={{ start }}&amp;end={{ end }}&amp;website={{ website }}&amp;type={{ type }}&amp;q={{ q }}&amp;page={{ page - 1 }}">&larr; Sebelumnya</a>
+            {% endif %}
+            <span class="muted small">Halaman {{ page }} / {{ total_pages }}</span>
+            {% if page < total_pages %}
+            <a class="btn" href="/changes?start={{ start }}&amp;end={{ end }}&amp;website={{ website }}&amp;type={{ type }}&amp;q={{ q }}&amp;page={{ page + 1 }}">Berikutnya &rarr;</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</section>
+{% endif %}
+{% endblock %}

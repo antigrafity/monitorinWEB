@@ -1,0 +1,231 @@
+{# Halaman Reports ContentMonitor (Tahap 5): 4 kartu KPI, chart "Changes Over
+   Time" (line chart SVG), "Changes by Type" (donut chart SVG buatan
+   sendiri), tombol "Generate Report" (ekspor CSV + simpan ke Riwayat
+   Laporan), dan tabel "Riwayat Laporan" (unduh/hapus). FORMAT CSV SAJA --
+   tidak ada PDF (Keputusan #3 HANDOFF.md). #}
+{% extends "base.html" %}
+{% set active_nav = 'reports' %}
+
+{% block title %}Reports &middot; ContentMonitor{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>Reports</h1>
+        <p class="muted small">Ringkasan periodik & ekspor CSV riwayat perubahan, alert, dan website.</p>
+    </div>
+</div>
+
+{% if load_error %}
+<div class="error-state" role="alert">
+    Terjadi kesalahan saat memuat data Reports. Data tersimpan tidak diubah.
+    Silakan coba lagi beberapa saat lagi.
+</div>
+{% else %}
+
+{% if used_default_range %}
+<div class="warning-state" role="status">
+    Rentang tanggal yang diberikan tidak valid; menampilkan 7 hari terakhir sebagai bawaan.
+</div>
+{% endif %}
+
+{% if generated %}
+<div class="success-state" role="status">
+    Laporan berhasil dibuat dan tersimpan di Riwayat Laporan di bawah.
+</div>
+{% endif %}
+
+{% if deleted %}
+<div class="success-state" role="status">
+    Laporan berhasil dihapus.
+</div>
+{% endif %}
+
+{% if generate_error %}
+<div class="error-state" role="alert">{{ generate_error }}</div>
+{% endif %}
+
+<section class="card">
+    <form class="filter-form" method="get" action="/reports">
+        <label class="field">Dari
+            <input type="date" name="start" value="{{ start }}">
+        </label>
+        <label class="field">Sampai
+            <input type="date" name="end" value="{{ end }}">
+        </label>
+        <button type="submit" class="btn btn-primary">Terapkan</button>
+        <a class="btn" href="/reports">Reset</a>
+    </form>
+</section>
+
+{# --- 4 kartu KPI --------------------------------------------------- #}
+<section class="kpi-grid" aria-label="Ringkasan KPI laporan">
+    <div class="kpi-card" data-kpi="total-changes">
+        <div class="kpi-icon kpi-icon-indigo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
+        </div>
+        <div class="kpi-label">Total Changes</div>
+        <div class="kpi-value">{{ kpi_total_changes }}</div>
+        <div class="kpi-note small">
+            {% if kpi_total_changes_pct > 0 %}
+            <span class="trend trend-up">&#8593; {{ kpi_total_changes_pct }}%</span>
+            {% elif kpi_total_changes_pct < 0 %}
+            <span class="trend trend-down">&#8595; {{ -kpi_total_changes_pct }}%</span>
+            {% else %}
+            <span class="trend trend-flat">&mdash; 0%</span>
+            {% endif %}
+            <span class="muted">vs periode sebelumnya</span>
+        </div>
+    </div>
+    <div class="kpi-card" data-kpi="avg-per-day">
+        <div class="kpi-icon kpi-icon-violet" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5a7 7 0 1 0 6.32 4M18 3v4h-4"/></svg>
+        </div>
+        <div class="kpi-label">Average Changes/Day</div>
+        <div class="kpi-value">{{ kpi_avg_changes_per_day }}</div>
+    </div>
+    <div class="kpi-card" data-kpi="most-active">
+        <div class="kpi-icon kpi-icon-indigo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 4 6.1 4 9s-1.5 6.3-4 9c-2.5-2.7-4-6.1-4-9s1.5-6.3 4-9z"/></svg>
+        </div>
+        <div class="kpi-label">Most Active Website</div>
+        {% if kpi_most_active_name %}
+        <div class="kpi-value" style="font-size:1.25rem;">{{ kpi_most_active_name }}</div>
+        <div class="kpi-note muted small">{{ kpi_most_active_count }} perubahan</div>
+        {% else %}
+        <div class="kpi-value" style="font-size:1.25rem;">&mdash;</div>
+        <div class="kpi-note muted small">Belum ada perubahan</div>
+        {% endif %}
+    </div>
+    <div class="kpi-card" data-kpi="total-alerts">
+        <div class="kpi-icon kpi-icon-violet" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a7 7 0 0 0-7 7v4l-2 4h18l-2-4v-4a7 7 0 0 0-7-7z"/><path d="M9.5 21a2.5 2.5 0 0 0 5 0"/></svg>
+        </div>
+        <div class="kpi-label">Total Alerts</div>
+        <div class="kpi-value">{{ kpi_total_alerts }}</div>
+        <div class="kpi-note small">
+            {% if kpi_total_alerts_pct > 0 %}
+            <span class="trend trend-up">&#8593; {{ kpi_total_alerts_pct }}%</span>
+            {% elif kpi_total_alerts_pct < 0 %}
+            <span class="trend trend-down">&#8595; {{ -kpi_total_alerts_pct }}%</span>
+            {% else %}
+            <span class="trend trend-flat">&mdash; 0%</span>
+            {% endif %}
+            <span class="muted">vs periode sebelumnya</span>
+        </div>
+    </div>
+</section>
+
+<div class="overview-grid">
+    {# --- Chart "Changes Over Time" ----------------------------------- #}
+    <section class="card chart-card">
+        <div class="card-title">
+            <h2>Changes Over Time</h2>
+            <span class="muted small">{{ start }} &ndash; {{ end }}</span>
+        </div>
+        <div class="chart-wrap">
+            {{ line_chart_svg(chart_labels, chart_counts) }}
+        </div>
+    </section>
+
+    {# --- Donut "Changes by Type" -------------------------------------- #}
+    <section class="card">
+        <div class="card-title">
+            <h2>Changes by Type</h2>
+        </div>
+        <div class="donut-wrap">
+            {{ donut_chart_svg(donut_added, donut_removed, donut_updated) }}
+        </div>
+        <ul class="donut-legend">
+            {% set donut_total = donut_added + donut_removed + donut_updated %}
+            <li><span class="legend-dot legend-added"></span> Added
+                <strong>{{ donut_added }}</strong>
+                <span class="muted small">({{ (donut_added / donut_total * 100)|round|int if donut_total else 0 }}%)</span>
+            </li>
+            <li><span class="legend-dot legend-removed"></span> Removed
+                <strong>{{ donut_removed }}</strong>
+                <span class="muted small">({{ (donut_removed / donut_total * 100)|round|int if donut_total else 0 }}%)</span>
+            </li>
+            <li><span class="legend-dot legend-updated"></span> Updated
+                <strong>{{ donut_updated }}</strong>
+                <span class="muted small">({{ (donut_updated / donut_total * 100)|round|int if donut_total else 0 }}%)</span>
+            </li>
+        </ul>
+    </section>
+</div>
+
+{# --- Ekspor CSV langsung + Generate Report ---------------------------- #}
+<section class="card">
+    <div class="card-title">
+        <h2>Ekspor CSV</h2>
+    </div>
+    <div class="row-actions">
+        <a class="btn" href="/reports/export?type=changes&amp;start={{ start }}&amp;end={{ end }}">Unduh Riwayat Perubahan (CSV)</a>
+        <a class="btn" href="/reports/export?type=alerts&amp;start={{ start }}&amp;end={{ end }}">Unduh Alert (CSV)</a>
+        <a class="btn" href="/reports/export?type=websites">Unduh Ringkasan Website (CSV)</a>
+    </div>
+
+    <form method="post" action="/reports/generate" class="form-row" style="margin-top: var(--space-4);">
+        <input type="hidden" name="start" value="{{ start }}">
+        <input type="hidden" name="end" value="{{ end }}">
+        <label class="field">Jenis Laporan
+            <select name="type">
+                <option value="changes">Riwayat Perubahan</option>
+                <option value="alerts">Alert</option>
+                <option value="websites">Ringkasan Website</option>
+            </select>
+        </label>
+        <button type="submit" class="btn btn-primary">Generate Report</button>
+    </form>
+    <p class="muted small" style="margin-top: var(--space-2);">
+        Rentang tanggal mengikuti filter di atas ({{ start }} &ndash; {{ end }}).
+        Jenis "Ringkasan Website" selalu mencakup seluruh website.
+    </p>
+</section>
+
+{# --- Tabel "Riwayat Laporan" ------------------------------------------- #}
+<section class="card">
+    <div class="card-title">
+        <h2>Riwayat Laporan</h2>
+    </div>
+    {% if reports|length == 0 %}
+    <div class="empty-state">
+        Belum ada laporan yang dibuat. Gunakan tombol "Generate Report" di atas
+        untuk membuat laporan pertama.
+    </div>
+    {% else %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Nama Laporan</th>
+                    <th scope="col">Dibuat Pada</th>
+                    <th scope="col">Ringkasan</th>
+                    <th scope="col">Format</th>
+                    <th scope="col">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for report in reports %}
+                <tr>
+                    <td>{{ report.name }}</td>
+                    <td>{{ report.created_at|fmt_dt_rel }}</td>
+                    <td>{{ report.summary }}</td>
+                    <td><span class="badge badge-format-csv">CSV</span></td>
+                    <td>
+                        <div class="row-actions">
+                            <a class="btn" href="/reports/{{ report.id }}/download">Download</a>
+                            <form method="post" action="/reports/{{ report.id }}/delete" data-confirm="Hapus laporan ini? Berkas CSV yang tersimpan juga akan dihapus.">
+                                <button type="submit" class="btn btn-danger">Hapus</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</section>
+{% endif %}
+{% endblock %}

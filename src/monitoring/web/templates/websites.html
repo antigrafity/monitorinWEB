@@ -1,0 +1,285 @@
+{# Halaman Websites ContentMonitor (Tahap 1): tabel penuh dengan search,
+   pagination server-side, sparkline 7 hari, status Aktif/Jeda/Inactive, aksi
+   (Edit, Buka situs, Cek Sekarang, Jeda/Lanjutkan, Hapus), serta formulir
+   "Tambah Website" (memakai rute POST /websites yang sudah ada).
+
+   Kelas & teks berikut DIPERTAHANKAN karena test lama bergantung padanya:
+   status-success/status-failure, "Berhasil"/"Gagal", "Belum pernah",
+   "Belum ada website yang dipantau", pesan add_error/edit_error apa adanya.
+   #}
+{% extends "base.html" %}
+{% set active_nav = 'websites' %}
+
+{% block title %}Websites &middot; ContentMonitor{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>Websites</h1>
+        <p class="muted small">Kelola seluruh Monitored_Website beserta status pemeriksaannya.</p>
+    </div>
+    <div class="page-head-actions">
+        <button type="button" class="btn btn-primary" data-open-modal="add-website-modal">+ Add Website</button>
+    </div>
+</div>
+
+{% if added %}
+<div class="success-state" role="status">
+    Domain <strong>{{ added }}</strong> berhasil ditambahkan sebagai Monitored_Website.
+</div>
+{% endif %}
+
+{% if updated %}
+<div class="success-state" role="status">
+    Pengaturan <strong>{{ updated }}</strong> berhasil diperbarui.
+</div>
+{% endif %}
+
+{% if add_error %}
+<div class="error-state" role="alert">{{ add_error }}</div>
+{% endif %}
+
+{% if edit_error %}
+<div class="error-state" role="alert">{{ edit_error }}</div>
+{% endif %}
+
+{% if load_error %}
+<div class="error-state" role="alert">
+    Terjadi kesalahan saat memuat data website. Data tersimpan tidak diubah.
+    Silakan coba lagi beberapa saat lagi.
+</div>
+{% else %}
+
+<section class="summary-grid" aria-label="Ringkasan status pemeriksaan">
+    <div class="summary-card total">
+        <div class="label">Website Dipantau</div>
+        <div class="value" data-summary="total">{{ summary_total }}</div>
+    </div>
+    <div class="summary-card ok">
+        <div class="label">Berhasil</div>
+        <div class="value" data-summary="success">{{ summary_success }}</div>
+    </div>
+    <div class="summary-card bad">
+        <div class="label">Gagal</div>
+        <div class="value" data-summary="failure">{{ summary_failure }}</div>
+    </div>
+    <div class="summary-card never">
+        <div class="label">Belum Diperiksa</div>
+        <div class="value" data-summary="never">{{ summary_never }}</div>
+    </div>
+</section>
+
+<section class="card">
+    <form class="search-form" method="get" action="/websites">
+        <label class="field search-field">
+            <span class="sr-only">Cari website</span>
+            <input type="text" name="q" value="{{ q }}" placeholder="Cari nama atau domain...">
+        </label>
+        <button type="submit" class="btn">Cari</button>
+        {% if q %}
+        <a class="btn" href="/websites">Reset</a>
+        {% endif %}
+    </form>
+
+    {% if not has_any_website %}
+    <div class="empty-state">
+        Belum ada website yang dipantau. Tambahkan domain pertama melalui
+        formulir di bawah untuk mulai memantau perubahan kontennya.
+    </div>
+    {% elif rows|length == 0 %}
+    <div class="empty-state">
+        Tidak ada hasil untuk pencarian "{{ q }}".
+    </div>
+    {% else %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Website</th>
+                    <th scope="col">Pages</th>
+                    <th scope="col">Interval</th>
+                    <th scope="col">Last Change</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Changes (7D)</th>
+                    <th scope="col">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in rows %}
+                <tr>
+                    <td>
+                        <div class="site-cell">
+                            <span class="avatar" style="background:{{ item.website.domain|avatar_color }}">{{ item.website.domain|avatar_letter }}</span>
+                            <div>
+                                <div class="site-name">{{ item.website.name }}</div>
+                                <div class="site-domain">
+                                    <a href="https://{{ item.website.domain }}" target="_blank" rel="noopener">{{ item.website.domain }}</a>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>{{ item.pages_count }}</td>
+                    <td>{{ item.website.poll_interval_seconds|fmt_interval }}</td>
+                    <td>
+                        {% if item.last_change_at %}
+                        {{ item.last_change_at|fmt_rel }}
+                        {% else %}
+                        <span class="never-checked">Belum ada</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.website.paused %}
+                        <span class="status status-paused">Paused</span>
+                        {% elif item.never_checked %}
+                        <span class="status status-never">Belum pernah diperiksa</span>
+                        {% elif item.is_success %}
+                        <span class="status status-success">Berhasil</span>
+                        {% elif item.is_failure %}
+                        <span class="status status-failure">Gagal</span>
+                        {% else %}
+                        <span class="status status-never">{{ item.last_status }}</span>
+                        {% endif %}
+                        <div class="muted small status-sub">
+                            {% if item.last_checked_at %}
+                            {{ item.last_checked_at|fmt_dt_rel }}
+                            {% else %}
+                            Belum pernah diperiksa
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>{{ item.daily_counts_7_days|counts_only|sparkline_svg }}</td>
+                    <td>
+                        <div class="row-actions">
+                            <button type="button" class="btn btn-primary btn-icon check-btn"
+                                    data-website-id="{{ item.website.id }}"
+                                    data-check-url="/websites/{{ item.website.id }}/check"
+                                    title="Cek Sekarang" aria-label="Cek Sekarang">
+                                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 4v5h-5"/></svg>
+                            </button>
+                            <a class="btn btn-icon" href="/websites/{{ item.website.id }}"
+                               title="Riwayat" aria-label="Riwayat">
+                                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
+                            </a>
+                            <a class="btn btn-icon" href="https://{{ item.website.domain }}" target="_blank" rel="noopener"
+                               title="Buka situs" aria-label="Buka situs">
+                                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 3h7v7"/><path d="M21 3 10 14"/><path d="M19 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h6"/></svg>
+                            </a>
+                            {% if item.website.paused %}
+                            <form method="post" action="/websites/{{ item.website.id }}/resume">
+                                <input type="hidden" name="next" value="/websites">
+                                <button type="submit" class="btn btn-icon" title="Lanjutkan" aria-label="Lanjutkan">
+                                    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 4l14 8-14 8V4z"/></svg>
+                                </button>
+                            </form>
+                            {% else %}
+                            <form method="post" action="/websites/{{ item.website.id }}/pause">
+                                <input type="hidden" name="next" value="/websites">
+                                <button type="submit" class="btn btn-icon" title="Jeda" aria-label="Jeda">
+                                    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+                                </button>
+                            </form>
+                            {% endif %}
+                            <form method="post" action="/websites/{{ item.website.id }}/delete"
+                                  data-confirm="Hapus {{ item.website.domain }} dari pemantauan?">
+                                <button type="submit" class="btn btn-danger delete-btn btn-icon" title="Hapus" aria-label="Hapus">
+                                    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                                </button>
+                            </form>
+                        </div>
+                        <span class="check-result" role="status"
+                              data-check-result="{{ item.website.id }}"></span>
+                        <details class="edit-panel">
+                            <summary class="btn-icon-summary" title="Edit" aria-label="Edit">
+                                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                            </summary>
+                            <form class="edit-form" method="post"
+                                  action="/websites/{{ item.website.id }}/edit">
+                                <label class="field">Nama
+                                    <input type="text" name="name"
+                                           value="{{ item.website.name }}"
+                                           placeholder="Nama tampilan">
+                                </label>
+                                <label class="field">Interval (detik)
+                                    <input type="number" name="poll_interval_seconds"
+                                           min="{{ poll_min_seconds }}"
+                                           max="{{ poll_max_seconds }}"
+                                           value="{{ item.website.poll_interval_seconds if item.website.poll_interval_seconds is not none else '' }}"
+                                           placeholder="kosong = interval global">
+                                    <span class="hint">
+                                        Kosongkan untuk memakai Polling_Interval global
+                                        ({{ global_interval_label }}). Rentang yang
+                                        diizinkan {{ poll_min_seconds }}&ndash;{{ poll_max_seconds }} detik.
+                                    </span>
+                                </label>
+                                <div>
+                                    <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
+                                </div>
+                            </form>
+                        </details>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="pagination">
+        <span class="muted small">
+            Showing {{ range_start }} to {{ range_end }} of {{ total_count }} websites
+        </span>
+        <div class="pagination-controls">
+            {% if page > 1 %}
+            <a class="btn" href="/websites?q={{ q }}&amp;page={{ page - 1 }}">&larr; Sebelumnya</a>
+            {% endif %}
+            <span class="muted small">Halaman {{ page }} / {{ total_pages }}</span>
+            {% if page < total_pages %}
+            <a class="btn" href="/websites?q={{ q }}&amp;page={{ page + 1 }}">Berikutnya &rarr;</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</section>
+
+{# --- Formulir tambah website (modal popup) --- Req 1.1, 1.4, 1.6 -------
+   Dibungkus overlay modal (bukan lagi card yang menempel di bawah halaman)
+   sehingga tombol "+ Add Website" langsung membuka form di atas konten
+   tanpa perlu scroll. Bila ada indikasi kesalahan (add_error) dari
+   percobaan submit sebelumnya, modal otomatis terbuka lewat atribut
+   data-open-on-load (Req desain umum: pengguna langsung melihat pesan
+   kesalahan tanpa perlu klik ulang tombol). #}
+<div class="modal-overlay" id="add-website-modal" data-modal
+     {% if add_error %}data-open-on-load{% endif %}
+     role="dialog" aria-modal="true" aria-labelledby="add-website-modal-title" hidden>
+    <div class="modal-panel">
+        <div class="modal-header">
+            <h2 id="add-website-modal-title">Tambah Website</h2>
+            <button type="button" class="modal-close" data-close-modal aria-label="Tutup">&times;</button>
+        </div>
+        <form class="add-website" method="post" action="/websites">
+            <div class="form-grid">
+                <label class="field">Domain
+                    <input type="text" name="domain" placeholder="contoh.com" required>
+                    <span class="hint">Tanpa http:// atau https://</span>
+                </label>
+                <label class="field">Nama (opsional)
+                    <input type="text" name="name" placeholder="Nama tampilan">
+                    <span class="hint">Kosong = memakai domain sebagai nama.</span>
+                </label>
+                <label class="field">Interval (detik, opsional)
+                    <input type="number" name="poll_interval_seconds"
+                           min="{{ poll_min_seconds }}" max="{{ poll_max_seconds }}"
+                           placeholder="kosong = interval global">
+                    <span class="hint">
+                        Kosong = Polling_Interval global ({{ global_interval_label }}).
+                        Rentang {{ poll_min_seconds }}&ndash;{{ poll_max_seconds }} detik.
+                    </span>
+                </label>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn" data-close-modal>Batal</button>
+                <button type="submit" class="btn btn-primary">Tambah Website</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

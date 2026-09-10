@@ -1,0 +1,154 @@
+{# Halaman Pages ContentMonitor (Tahap 2): daftar/pemantauan seluruh halaman
+   yang ditemukan OTOMATIS oleh crawler (Keputusan #1 & #2 HANDOFF.md) — TIDAK
+   ada tombol "+ Add Page" maupun interval per-halaman. Tab filter status
+   (All/Active/Paused/Broken) + search + filter website + pagination. #}
+{% extends "base.html" %}
+{% set active_nav = 'pages' %}
+
+{% block title %}Pages &middot; ContentMonitor{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>Pages</h1>
+        <p class="muted small">
+            Seluruh halaman yang ditemukan otomatis oleh crawler. Halaman tidak
+            dikelola manual; jeda per halaman tersedia bila perlu.
+        </p>
+    </div>
+</div>
+
+{% if load_error %}
+<div class="error-state" role="alert">
+    Terjadi kesalahan saat memuat data halaman. Data tersimpan tidak diubah.
+    Silakan coba lagi beberapa saat lagi.
+</div>
+{% else %}
+
+<section class="card">
+    <nav class="tabs" aria-label="Filter status halaman">
+        <a class="tab {{ 'active' if status == 'all' else '' }}" href="/pages?status=all&amp;website={{ website }}&amp;q={{ q }}">All <span class="tab-count">{{ count_all }}</span></a>
+        <a class="tab {{ 'active' if status == 'active' else '' }}" href="/pages?status=active&amp;website={{ website }}&amp;q={{ q }}">Active <span class="tab-count">{{ count_active }}</span></a>
+        <a class="tab {{ 'active' if status == 'paused' else '' }}" href="/pages?status=paused&amp;website={{ website }}&amp;q={{ q }}">Paused <span class="tab-count">{{ count_paused }}</span></a>
+        <a class="tab {{ 'active' if status == 'broken' else '' }}" href="/pages?status=broken&amp;website={{ website }}&amp;q={{ q }}">Broken <span class="tab-count">{{ count_broken }}</span></a>
+    </nav>
+
+    <form class="filter-form" method="get" action="/pages">
+        <input type="hidden" name="status" value="{{ status }}">
+        <label class="field">Website
+            <select name="website">
+                <option value="">Semua Website</option>
+                {% for w in websites %}
+                <option value="{{ w.id }}" {% if w.id == website %}selected{% endif %}>{{ w.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label class="field search-field">Cari
+            <input type="text" name="q" value="{{ q }}" placeholder="Cari path atau URL...">
+        </label>
+        <button type="submit" class="btn btn-primary">Terapkan</button>
+        <a class="btn" href="/pages">Reset</a>
+    </form>
+
+    {% if not has_any_page %}
+    <div class="empty-state">
+        Belum ada halaman yang terpantau. Halaman akan muncul otomatis di sini
+        setelah crawler menemukan & memeriksa website.
+    </div>
+    {% elif rows|length == 0 %}
+    <div class="empty-state">
+        Tidak ada halaman untuk filter ini.
+    </div>
+    {% else %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Page</th>
+                    <th scope="col">Website</th>
+                    <th scope="col">Interval</th>
+                    <th scope="col">Last Change</th>
+                    <th scope="col">Last Checked</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in rows %}
+                <tr>
+                    <td class="mono small">{{ item.url }}</td>
+                    <td>
+                        <div class="site-cell">
+                            <span class="avatar" style="background:{{ item.website.domain|avatar_color }}">{{ item.website.domain|avatar_letter }}</span>
+                            <div class="site-domain">{{ item.website.domain }}</div>
+                        </div>
+                    </td>
+                    <td>{{ item.website.poll_interval_seconds|fmt_interval }}</td>
+                    <td>
+                        {% if item.last_change_at %}
+                        {{ item.last_change_at|fmt_rel }}
+                        {% else %}
+                        <span class="never-checked">Belum ada</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.last_checked_at %}
+                        {{ item.last_checked_at|fmt_dt_rel }}
+                        {% else %}
+                        <span class="never-checked">Belum pernah</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.status_label == 'Broken' %}
+                        <span class="status status-failure">Broken</span>
+                        {% if item.last_error %}
+                        <div class="muted small status-sub">{{ item.last_error }}</div>
+                        {% endif %}
+                        {% elif item.status_label == 'Paused' %}
+                        <span class="status status-paused">Paused</span>
+                        {% else %}
+                        <span class="status status-success">Active</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="row-actions">
+                            <a class="btn" href="{{ item.url }}" target="_blank" rel="noopener">Buka</a>
+                            <a class="btn" href="/websites/{{ item.website.id }}">Riwayat</a>
+                            {% if item.page_paused %}
+                            <form method="post" action="/pages/resume">
+                                <input type="hidden" name="url" value="{{ item.url }}">
+                                <input type="hidden" name="next" value="/pages?status={{ status }}&amp;website={{ website }}&amp;q={{ q }}&amp;page={{ page }}">
+                                <button type="submit" class="btn">Lanjutkan</button>
+                            </form>
+                            {% else %}
+                            <form method="post" action="/pages/pause">
+                                <input type="hidden" name="url" value="{{ item.url }}">
+                                <input type="hidden" name="next" value="/pages?status={{ status }}&amp;website={{ website }}&amp;q={{ q }}&amp;page={{ page }}">
+                                <button type="submit" class="btn">Jeda</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="pagination">
+        <span class="muted small">
+            Showing {{ range_start_idx }} to {{ range_end_idx }} of {{ total_count }} pages
+        </span>
+        <div class="pagination-controls">
+            {% if page > 1 %}
+            <a class="btn" href="/pages?status={{ status }}&amp;website={{ website }}&amp;q={{ q }}&amp;page={{ page - 1 }}">&larr; Sebelumnya</a>
+            {% endif %}
+            <span class="muted small">Halaman {{ page }} / {{ total_pages }}</span>
+            {% if page < total_pages %}
+            <a class="btn" href="/pages?status={{ status }}&amp;website={{ website }}&amp;q={{ q }}&amp;page={{ page + 1 }}">Berikutnya &rarr;</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</section>
+{% endif %}
+{% endblock %}

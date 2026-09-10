@@ -1,0 +1,200 @@
+{# Halaman Settings ContentMonitor Tahap 4.
+   Empat tab: General, Monitoring, Notifications, Keywords.
+   Token/secret Telegram TIDAK PERNAH ditampilkan di HTML. #}
+{% extends "base.html" %}
+{% block title %}Settings — ContentMonitor{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Settings</h1>
+    <p class="page-subtitle">Konfigurasi sistem pemantauan</p>
+</div>
+
+{# Flash messages #}
+{% if saved %}
+<div class="flash flash-success" id="flash-saved">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+    Pengaturan berhasil disimpan.
+</div>
+{% endif %}
+{% if deleted %}
+<div class="flash flash-success" id="flash-deleted">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+    Kata kunci berhasil dihapus.
+</div>
+{% endif %}
+{% if error_message %}
+<div class="flash flash-error" id="flash-error">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>
+    {{ error_message }}
+</div>
+{% endif %}
+
+{# Tab navigation #}
+<div class="settings-tabs" role="tablist">
+    <a href="/settings?tab=general" role="tab" class="settings-tab {{ 'active' if tab == 'general' else '' }}"
+       aria-selected="{{ 'true' if tab == 'general' else 'false' }}" id="tab-general">General</a>
+    <a href="/settings?tab=monitoring" role="tab" class="settings-tab {{ 'active' if tab == 'monitoring' else '' }}"
+       aria-selected="{{ 'true' if tab == 'monitoring' else 'false' }}" id="tab-monitoring">Monitoring</a>
+    <a href="/settings?tab=notifications" role="tab" class="settings-tab {{ 'active' if tab == 'notifications' else '' }}"
+       aria-selected="{{ 'true' if tab == 'notifications' else 'false' }}" id="tab-notifications">Notifications</a>
+    <a href="/settings?tab=keywords" role="tab" class="settings-tab {{ 'active' if tab == 'keywords' else '' }}"
+       aria-selected="{{ 'true' if tab == 'keywords' else 'false' }}" id="tab-keywords">Keywords</a>
+</div>
+
+{# === Tab: General === #}
+{% if tab == 'general' %}
+<div class="settings-panel" role="tabpanel" aria-labelledby="tab-general">
+    <form method="post" action="/settings" class="settings-form">
+        <input type="hidden" name="tab" value="general">
+        <div class="form-group">
+            <label for="instance_name">Nama Instans</label>
+            <input type="text" id="instance_name" name="instance_name" value="{{ instance_name }}"
+                   placeholder="ContentMonitor" maxlength="100" class="form-input">
+            <p class="form-hint">Nama yang ditampilkan pada header dashboard.</p>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="btn-save-general">Simpan Perubahan</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+{# === Tab: Monitoring === #}
+{% if tab == 'monitoring' %}
+<div class="settings-panel" role="tabpanel" aria-labelledby="tab-monitoring">
+    <form method="post" action="/settings" class="settings-form">
+        <input type="hidden" name="tab" value="monitoring">
+        <div class="form-group">
+            <label for="poll_interval_minutes">Polling Interval Global (menit)</label>
+            <input type="number" id="poll_interval_minutes" name="poll_interval_minutes"
+                   value="{{ poll_interval_minutes }}" min="1" max="1440" class="form-input">
+            <p class="form-hint">Interval pemeriksaan bawaan untuk website yang tidak memiliki interval khusus (1–1440 menit).</p>
+        </div>
+        <div class="form-group">
+            <label for="snapshot_retention">Retensi Snapshot (per URL)</label>
+            <input type="number" id="snapshot_retention" name="snapshot_retention"
+                   value="{{ snapshot_retention }}" min="2" max="100" class="form-input">
+            <p class="form-hint">Jumlah snapshot terakhir yang disimpan per halaman (2–100).</p>
+        </div>
+        <div class="form-group">
+            <label for="change_retention_days">Retensi Riwayat Perubahan (hari)</label>
+            <input type="number" id="change_retention_days" name="change_retention_days"
+                   value="{{ change_retention_days }}" min="1" max="365" class="form-input">
+            <p class="form-hint">Riwayat perubahan yang lebih lama dari nilai ini akan dihapus otomatis (1–365 hari).</p>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="btn-save-monitoring">Simpan Perubahan</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+{# === Tab: Notifications === #}
+{% if tab == 'notifications' %}
+<div class="settings-panel" role="tabpanel" aria-labelledby="tab-notifications">
+    <div class="settings-form">
+        <div class="form-group">
+            <label>Status Telegram</label>
+            <div class="status-indicator {{ 'status-active' if telegram_configured else 'status-inactive' }}">
+                {% if telegram_configured %}
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                <span>Aktif — Kredensial Telegram dikonfigurasi</span>
+                {% else %}
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+                <span>Belum Dikonfigurasi — Set variabel lingkungan TELEGRAM_BOT_TOKEN dan TELEGRAM_CHAT_ID</span>
+                {% endif %}
+            </div>
+            <p class="form-hint">Token dan Chat ID dikonfigurasi melalui variabel lingkungan dan tidak ditampilkan di sini demi keamanan.</p>
+        </div>
+        {% if telegram_configured %}
+        <div class="form-actions">
+            <button type="button" class="btn btn-secondary" id="btn-test-notification">Kirim Tes Notifikasi</button>
+            <span id="test-notification-result" class="test-result"></span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{# === Tab: Keywords === #}
+{% if tab == 'keywords' %}
+<div class="settings-panel" role="tabpanel" aria-labelledby="tab-keywords">
+    {# Form Tambah Kata Kunci #}
+    <form method="post" action="/settings/keywords" class="settings-form keyword-add-form">
+        <h3 class="form-section-title">Tambah Kata Kunci</h3>
+        <div class="form-row">
+            <div class="form-group form-group-flex">
+                <label for="kw_website_id">Website</label>
+                <select id="kw_website_id" name="website_id" class="form-input" required>
+                    <option value="">— Pilih Website —</option>
+                    {% for w in websites %}
+                    <option value="{{ w.id }}">{{ w.name }} ({{ w.domain }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group form-group-flex">
+                <label for="kw_keyword">Kata Kunci</label>
+                <input type="text" id="kw_keyword" name="keyword" class="form-input" required
+                       placeholder="misal: diskon, error 500" maxlength="200">
+            </div>
+            <div class="form-group form-group-flex">
+                <label for="kw_mode">Mode</label>
+                <select id="kw_mode" name="mode" class="form-input">
+                    <option value="must_exist">Harus Ada (must_exist)</option>
+                    <option value="must_not_exist">Tidak Boleh Ada (must_not_exist)</option>
+                </select>
+            </div>
+            <div class="form-group form-group-btn">
+                <button type="submit" class="btn btn-primary" id="btn-add-keyword">Tambah</button>
+            </div>
+        </div>
+    </form>
+
+    {# Daftar Kata Kunci #}
+    <div class="keywords-list">
+        <h3 class="form-section-title">Daftar Kata Kunci ({{ keywords|length }})</h3>
+        {% if keywords %}
+        <div class="table-responsive">
+            <table class="data-table" id="keywords-table">
+                <thead>
+                    <tr>
+                        <th>Website</th>
+                        <th>Kata Kunci</th>
+                        <th>Mode</th>
+                        <th>Ditambahkan</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for kw in keywords %}
+                    <tr>
+                        <td>{{ kw.website_name }}</td>
+                        <td><code>{{ kw.keyword.keyword }}</code></td>
+                        <td>
+                            <span class="chip chip-{{ 'green' if kw.keyword.mode == 'must_exist' else 'red' }}">
+                                {{ 'Harus Ada' if kw.keyword.mode == 'must_exist' else 'Tidak Boleh Ada' }}
+                            </span>
+                        </td>
+                        <td>{{ kw.keyword.created_at.strftime('%d %b %Y %H:%M') }}</td>
+                        <td>
+                            <form method="post" action="/settings/keywords/delete" class="inline-form">
+                                <input type="hidden" name="keyword_id" value="{{ kw.keyword.id }}">
+                                <button type="submit" class="btn btn-danger btn-sm" title="Hapus kata kunci">Hapus</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p>Belum ada kata kunci yang dipantau. Tambahkan kata kunci di atas untuk memulai.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

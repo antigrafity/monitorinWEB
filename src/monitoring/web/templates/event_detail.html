@@ -1,0 +1,206 @@
+{# Halaman detail Change_Event: perbandingan "Sebelum" vs "Sesudah" (Req 10.5).
+
+   Bagian utama menampilkan perbandingan sisi-ke-sisi baris teks yang dihapus
+   (kiri, "Sebelum") dengan baris teks yang ditambahkan (kanan, "Sesudah"),
+   dipasangkan baris-per-baris; sisi yang lebih pendek diberi sel kosong
+   sebagai penyeimbang. Bagian berikutnya mengelompokkan perubahan Link,
+   Section, dan Gambar (dengan pratinjau thumbnail) dan hanya dirender bila
+   ada isinya.
+
+   Req 10.8: indikasi kesalahan saat pemuatan gagal (tanpa mutasi data).
+   Change_Event tidak ditemukan -> indikasi "tidak ditemukan" (404). #}
+{% extends "base.html" %}
+{% set active_nav = 'websites' %}
+
+{% block title %}Detail Perubahan{% if event %} &middot; {{ event.url }}{% endif %}{% endblock %}
+
+{% block content %}
+<a class="back" href="/websites">&larr; Kembali ke daftar website</a>
+
+{% if load_error %}
+<div class="error-state" role="alert">
+    Terjadi kesalahan saat memuat detail perubahan. Data tersimpan tidak diubah.
+    Silakan coba lagi beberapa saat lagi.
+</div>
+{% elif not_found %}
+<h1>Change_Event tidak ditemukan</h1>
+<div class="empty-state">
+    Change_Event dengan id "{{ event_id }}" tidak ditemukan.
+</div>
+{% else %}
+<div class="page-head">
+    <div>
+        <h1>Detail Perubahan</h1>
+        <p class="muted small">
+            <a class="mono" href="{{ event.url }}" target="_blank" rel="noopener">{{ event.url }}</a>
+            &middot; terdeteksi {{ event.detected_at|fmt_dt_rel }}
+        </p>
+        <div class="chips">
+            {% if event.summary.text_added %}
+            <span class="chip chip-add">teks +{{ event.summary.text_added }}</span>
+            {% endif %}
+            {% if event.summary.text_removed %}
+            <span class="chip chip-del">teks &minus;{{ event.summary.text_removed }}</span>
+            {% endif %}
+            {% if event.summary.links_added %}
+            <span class="chip chip-add">link +{{ event.summary.links_added }}</span>
+            {% endif %}
+            {% if event.summary.links_removed %}
+            <span class="chip chip-del">link &minus;{{ event.summary.links_removed }}</span>
+            {% endif %}
+            {% if event.summary.images_changed %}
+            <span class="chip chip-mod">gambar ~{{ event.summary.images_changed }}</span>
+            {% endif %}
+        </div>
+    </div>
+    <a class="btn" href="/websites/{{ event.website_id }}">Riwayat website</a>
+</div>
+
+{# --- Perubahan judul & meta description (ContentMonitor Tahap 3) -------- #}
+{% if diff.title_changed or diff.meta_changed %}
+<section class="card" aria-label="Perubahan judul dan meta description">
+    <div class="card-title"><h2>Perubahan Judul &amp; Meta Description</h2></div>
+    <div class="change-groups">
+        {% if diff.title_changed %}
+        <div class="change-group">
+            <h3>Judul Halaman</h3>
+            <div class="diff-line diff-removed"><span class="marker" aria-hidden="true">&minus;</span><span class="diff-text">{{ diff.title_changed[0] or '(tidak ada)' }}</span></div>
+            <div class="diff-line diff-added"><span class="marker" aria-hidden="true">+</span><span class="diff-text">{{ diff.title_changed[1] or '(tidak ada)' }}</span></div>
+        </div>
+        {% endif %}
+        {% if diff.meta_changed %}
+        <div class="change-group">
+            <h3>Meta Description</h3>
+            <div class="diff-line diff-removed"><span class="marker" aria-hidden="true">&minus;</span><span class="diff-text">{{ diff.meta_changed[0] or '(tidak ada)' }}</span></div>
+            <div class="diff-line diff-added"><span class="marker" aria-hidden="true">+</span><span class="diff-text">{{ diff.meta_changed[1] or '(tidak ada)' }}</span></div>
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endif %}
+
+{# --- Perbandingan teks sisi-ke-sisi --- Req 10.5 ------------------------ #}
+{% set removed_lines = diff.text_removed or [] %}
+{% set added_lines = diff.text_added or [] %}
+{% set row_count = [removed_lines|length, added_lines|length]|max %}
+<section class="card" aria-label="Perbandingan konten teks">
+    <div class="card-title">
+        <h2>Perbandingan Konten Teks</h2>
+        <span class="muted small">Sebelum (kiri) vs Sesudah (kanan)</span>
+    </div>
+
+    {% if row_count == 0 %}
+    <div class="empty-state">Tidak ada perubahan teks pada halaman ini.</div>
+    {% else %}
+    <div class="compare-row compare-headers">
+        <div class="compare-head before" id="sebelum">Sebelum</div>
+        <div class="compare-head after" id="sesudah">Sesudah</div>
+    </div>
+    {% for i in range(row_count) %}
+    <div class="compare-row">
+        {% if i < removed_lines|length %}
+        <div class="diff-line diff-removed" data-side="before">
+            <span class="side-label">Sebelum</span>
+            <span class="marker" aria-hidden="true">&minus;</span>
+            <span class="diff-text">{{ removed_lines[i] }}</span>
+        </div>
+        {% else %}
+        {# Penyeimbang: sisi "Sebelum" tidak punya baris pada posisi ini. #}
+        <div class="diff-line diff-empty" data-side="before" aria-hidden="true"></div>
+        {% endif %}
+        {% if i < added_lines|length %}
+        <div class="diff-line diff-added" data-side="after">
+            <span class="side-label">Sesudah</span>
+            <span class="marker" aria-hidden="true">+</span>
+            <span class="diff-text">{{ added_lines[i] }}</span>
+        </div>
+        {% else %}
+        {# Penyeimbang: sisi "Sesudah" tidak punya baris pada posisi ini. #}
+        <div class="diff-line diff-empty" data-side="after" aria-hidden="true"></div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% endif %}
+</section>
+
+{# --- Kelompok perubahan lain (hanya dirender bila ada isinya) ---------- #}
+{% macro text_group(title, items, css, marker) %}
+{% if items %}
+<div class="change-group">
+    <h3>{{ title }} <span class="chip">{{ items|length }}</span></h3>
+    <ul class="diff-list">
+        {% for item in items %}
+        <li class="diff-line {{ css }}">
+            <span class="marker" aria-hidden="true">{{ marker }}</span>
+            <span class="diff-text mono">{{ item }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro image_group(title, items, css, marker) %}
+{% if items %}
+<div class="change-group">
+    <h3>{{ title }} <span class="chip">{{ items|length }}</span></h3>
+    <ul class="diff-list">
+        {% for item in items %}
+        <li class="image-item {{ css }}">
+            <img class="thumb" src="{{ item }}" alt="Pratinjau gambar" loading="lazy"
+                 referrerpolicy="no-referrer" width="84" height="84">
+            <span class="thumb-fallback">Pratinjau tidak tersedia</span>
+            <span>
+                <span class="marker" aria-hidden="true">{{ marker }}</span>
+                <a class="mono" href="{{ item }}" target="_blank" rel="noopener">{{ item }}</a>
+            </span>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% set has_links = diff.links_added or diff.links_removed %}
+{% set has_sections = diff.sections_added or diff.sections_removed %}
+{% set has_images = diff.images_added or diff.images_removed or diff.images_changed %}
+
+{% if has_links %}
+<section class="card" aria-label="Perubahan link">
+    <div class="card-title"><h2>Perubahan Link</h2></div>
+    <div class="change-groups">
+        {{ text_group("Link ditambahkan", diff.links_added, "diff-added", "+") }}
+        {{ text_group("Link dihapus", diff.links_removed, "diff-removed", "−") }}
+    </div>
+</section>
+{% endif %}
+
+{% if has_sections %}
+<section class="card" aria-label="Perubahan section">
+    <div class="card-title"><h2>Perubahan Section</h2></div>
+    <div class="change-groups">
+        {{ text_group("Section ditambahkan", diff.sections_added, "diff-added", "+") }}
+        {{ text_group("Section dihapus", diff.sections_removed, "diff-removed", "−") }}
+    </div>
+</section>
+{% endif %}
+
+{% if has_images %}
+<section class="card" aria-label="Perubahan gambar">
+    <div class="card-title">
+        <h2>Perubahan Gambar</h2>
+        <span class="muted small">Pratinjau dimuat langsung dari sumbernya.</span>
+    </div>
+    <div class="change-groups">
+        {{ image_group("Gambar ditambahkan", diff.images_added, "diff-added", "+") }}
+        {{ image_group("Gambar dihapus", diff.images_removed, "diff-removed", "−") }}
+        {{ image_group("Gambar berubah", diff.images_changed, "diff-changed", "~") }}
+    </div>
+</section>
+{% endif %}
+
+{% if row_count == 0 and not has_links and not has_sections and not has_images and not diff.title_changed and not diff.meta_changed %}
+<div class="empty-state">Change_Event ini tidak memuat rincian Diff.</div>
+{% endif %}
+{% endif %}
+{% endblock %}

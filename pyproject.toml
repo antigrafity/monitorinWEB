@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "website-monitoring"
+version = "0.1.0"
+description = "Website Content Monitoring System - memantau perubahan konten website"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "httpx",
+    "beautifulsoup4",
+    "lxml",
+    "aiosqlite",
+    "fastapi",
+    "jinja2",
+    "uvicorn",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "hypothesis",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# Template Jinja2 & aset statis dashboard ikut dibundel saat paket dipasang.
+[tool.setuptools.package-data]
+"monitoring.web" = ["templates/*.html", "static/*"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+addopts = "-ra"
+markers = [
+    "integration: uji integrasi yang merangkai beberapa komponen (mis. konkurensi Fetcher).",
+]

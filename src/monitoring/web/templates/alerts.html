@@ -1,0 +1,141 @@
+{# Halaman Alerts ContentMonitor (Tahap 3): daftar seluruh Alert lintas
+   website. Tab All/Unread/Critical/Warning/Info + search + filter website +
+   pagination. Aksi: tandai dibaca, tandai selesai, lihat halaman terkait. #}
+{% extends "base.html" %}
+{% set active_nav = 'alerts' %}
+
+{% block title %}Alerts &middot; ContentMonitor{% endblock %}
+
+{% block content %}
+{% set next_url = '/alerts?tab=' + tab + '&website=' + website + '&q=' + q + '&page=' + page|string %}
+<div class="page-head">
+    <div>
+        <h1>Alerts</h1>
+        <p class="muted small">Notifikasi kondisi yang memerlukan perhatian pada website yang dipantau.</p>
+    </div>
+</div>
+
+{% if load_error %}
+<div class="error-state" role="alert">
+    Terjadi kesalahan saat memuat data alert. Data tersimpan tidak diubah.
+    Silakan coba lagi beberapa saat lagi.
+</div>
+{% else %}
+
+<section class="card">
+    <nav class="tabs" aria-label="Filter status/severity alert">
+        <a class="tab {{ 'active' if tab == 'all' else '' }}" href="/alerts?tab=all&amp;website={{ website }}&amp;q={{ q }}">All <span class="tab-count">{{ count_all }}</span></a>
+        <a class="tab {{ 'active' if tab == 'unread' else '' }}" href="/alerts?tab=unread&amp;website={{ website }}&amp;q={{ q }}">Unread <span class="tab-count">{{ count_unread }}</span></a>
+        <a class="tab {{ 'active' if tab == 'critical' else '' }}" href="/alerts?tab=critical&amp;website={{ website }}&amp;q={{ q }}">Critical <span class="tab-count">{{ count_critical }}</span></a>
+        <a class="tab {{ 'active' if tab == 'warning' else '' }}" href="/alerts?tab=warning&amp;website={{ website }}&amp;q={{ q }}">Warning <span class="tab-count">{{ count_warning }}</span></a>
+        <a class="tab {{ 'active' if tab == 'info' else '' }}" href="/alerts?tab=info&amp;website={{ website }}&amp;q={{ q }}">Info <span class="tab-count">{{ count_info }}</span></a>
+    </nav>
+
+    <form class="filter-form" method="get" action="/alerts">
+        <input type="hidden" name="tab" value="{{ tab }}">
+        <label class="field">Website
+            <select name="website">
+                <option value="">Semua Website</option>
+                {% for w in websites %}
+                <option value="{{ w.id }}" {% if w.id == website %}selected{% endif %}>{{ w.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label class="field search-field">Cari
+            <input type="text" name="q" value="{{ q }}" placeholder="Cari judul, detail, atau URL...">
+        </label>
+        <button type="submit" class="btn btn-primary">Terapkan</button>
+        <a class="btn" href="/alerts">Reset</a>
+    </form>
+
+    {% if not has_any_alert %}
+    <div class="empty-state">
+        Belum ada alert. Alert akan muncul otomatis di sini saat sistem
+        mendeteksi kondisi yang memerlukan perhatian (halaman gagal diakses,
+        penghapusan konten signifikan, perubahan judul/meta, SSL akan
+        kadaluarsa, dan lainnya).
+    </div>
+    {% elif rows|length == 0 %}
+    <div class="empty-state">
+        Tidak ada alert untuk filter ini.
+    </div>
+    {% else %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Alert</th>
+                    <th scope="col">Website</th>
+                    <th scope="col">Page</th>
+                    <th scope="col">Severity</th>
+                    <th scope="col">Triggered At</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in rows %}
+                {% set alert = item.alert %}
+                <tr>
+                    <td>
+                        <div class="alert-feed-title">{{ alert.title }}</div>
+                        {% if alert.detail %}
+                        <div class="muted small">{{ alert.detail }}</div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.website %}
+                        <div class="site-cell">
+                            <span class="avatar" style="background:{{ item.website.domain|avatar_color }}">{{ item.website.domain|avatar_letter }}</span>
+                            <div class="site-domain">{{ item.website.domain }}</div>
+                        </div>
+                        {% else %}
+                        <span class="muted small">Website tidak dikenal</span>
+                        {% endif %}
+                    </td>
+                    <td class="mono small">{{ alert.url or '—' }}</td>
+                    <td><span class="badge badge-{{ alert.severity }}">{{ alert.severity|capitalize }}</span></td>
+                    <td>{{ alert.triggered_at|fmt_rel }}</td>
+                    <td><span class="status status-{{ alert.status }}">{{ alert.status|capitalize }}</span></td>
+                    <td>
+                        <div class="row-actions">
+                            {% if alert.url %}
+                            <a class="btn" href="{{ alert.url }}" target="_blank" rel="noopener">Lihat Halaman</a>
+                            {% endif %}
+                            {% if alert.status == 'unread' %}
+                            <form method="post" action="/alerts/{{ alert.id }}/read">
+                                <input type="hidden" name="next" value="{{ next_url }}">
+                                <button type="submit" class="btn">Tandai Dibaca</button>
+                            </form>
+                            {% endif %}
+                            {% if alert.status != 'resolved' %}
+                            <form method="post" action="/alerts/{{ alert.id }}/resolve">
+                                <input type="hidden" name="next" value="{{ next_url }}">
+                                <button type="submit" class="btn">Tandai Selesai</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="pagination">
+        <span class="muted small">
+            Showing {{ range_start_idx }} to {{ range_end_idx }} of {{ total_count }} alerts
+        </span>
+        <div class="pagination-controls">
+            {% if page > 1 %}
+            <a class="btn" href="/alerts?tab={{ tab }}&amp;website={{ website }}&amp;q={{ q }}&amp;page={{ page - 1 }}">&larr; Sebelumnya</a>
+            {% endif %}
+            <span class="muted small">Halaman {{ page }} / {{ total_pages }}</span>
+            {% if page < total_pages %}
+            <a class="btn" href="/alerts?tab={{ tab }}&amp;website={{ website }}&amp;q={{ q }}&amp;page={{ page + 1 }}">Berikutnya &rarr;</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</section>
+{% endif %}
+{% endblock %}

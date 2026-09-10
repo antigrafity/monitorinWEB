@@ -1,0 +1,13 @@
+# Runtime dependencies
+httpx
+beautifulsoup4
+lxml
+aiosqlite
+fastapi
+jinja2
+uvicorn
+
+# Development / testing dependencies
+pytest
+pytest-asyncio
+hypothesis

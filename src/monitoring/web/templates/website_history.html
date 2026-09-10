@@ -1,0 +1,90 @@
+{# Halaman riwayat Change_Event sebuah Monitored_Website.
+
+   Req 10.4: riwayat ditampilkan terbaru -> terlama (urutan dari repository).
+   Req 10.7: empty state saat belum ada perubahan tercatat.
+   Req 10.8: indikasi kesalahan saat pemuatan gagal (tanpa mutasi data).
+   Website tidak ditemukan -> indikasi "tidak ditemukan" (404). #}
+{% extends "base.html" %}
+{% set active_nav = 'websites' %}
+
+{% block title %}Riwayat Perubahan{% if website %} &middot; {{ website.name }}{% endif %}{% endblock %}
+
+{% block content %}
+<a class="back" href="/websites">&larr; Kembali ke daftar website</a>
+
+{% if load_error %}
+<div class="error-state" role="alert">
+    Terjadi kesalahan saat memuat riwayat perubahan. Data tersimpan tidak diubah.
+    Silakan coba lagi beberapa saat lagi.
+</div>
+{% elif not_found %}
+<h1>Website tidak ditemukan</h1>
+<div class="empty-state">
+    Monitored_Website dengan id "{{ website_id }}" tidak ditemukan.
+</div>
+{% else %}
+<div class="page-head">
+    <div>
+        <h1>Riwayat Perubahan: {{ website.name }}</h1>
+        <p class="muted small">
+            <a href="https://{{ website.domain }}" target="_blank" rel="noopener">{{ website.domain }}</a>
+            &middot; {{ events|length }} perubahan tercatat
+            &middot; Interval {{ website.poll_interval_seconds|fmt_interval }}
+        </p>
+    </div>
+</div>
+
+{% if events|length == 0 %}
+<div class="empty-state">
+    Belum ada perubahan tercatat.
+</div>
+{% else %}
+<section class="card">
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Waktu Deteksi</th>
+                    <th scope="col">Halaman (URL)</th>
+                    <th scope="col">Ringkasan</th>
+                    <th scope="col">Detail</th>
+                </tr>
+            </thead>
+            <tbody>
+                {# Urutan dokumen mengikuti urutan repository: terbaru dulu (Req 10.4). #}
+                {% for event in events %}
+                <tr>
+                    <td>
+                        <div>{{ event.detected_at|fmt_dt }}</div>
+                        <div class="muted small">{{ event.detected_at|fmt_rel }}</div>
+                    </td>
+                    <td class="mono">{{ event.url }}</td>
+                    <td>
+                        <div class="chips">
+                            {% if event.summary.text_added %}
+                            <span class="chip chip-add">teks +{{ event.summary.text_added }}</span>
+                            {% endif %}
+                            {% if event.summary.text_removed %}
+                            <span class="chip chip-del">teks &minus;{{ event.summary.text_removed }}</span>
+                            {% endif %}
+                            {% if event.summary.links_added %}
+                            <span class="chip chip-add">link +{{ event.summary.links_added }}</span>
+                            {% endif %}
+                            {% if event.summary.links_removed %}
+                            <span class="chip chip-del">link &minus;{{ event.summary.links_removed }}</span>
+                            {% endif %}
+                            {% if event.summary.images_changed %}
+                            <span class="chip chip-mod">gambar ~{{ event.summary.images_changed }}</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td><a class="btn" href="/events/{{ event.id }}">Lihat Diff</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}

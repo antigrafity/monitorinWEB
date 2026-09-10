@@ -1,0 +1,15 @@
+.venv/
+.git/
+.gitignore
+.pytest_cache/
+.hypothesis/
+.vscode/
+.kiro/
+tests/
+*.db
+*.db-shm
+*.db-wal
+__pycache__/
+*.pyc
+.DS_Store
+HANDOFF.md

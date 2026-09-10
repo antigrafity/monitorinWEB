@@ -1,0 +1,55 @@
+# systemd unit untuk Website Monitoring System.
+#
+# Cara pakai (jalankan sebagai root / dengan sudo):
+#   1. Salin repo ke server, mis. ke /opt/monitoring
+#   2. Buat virtualenv & install dependency (lihat deploy/README-DEPLOY.md)
+#   3. Sesuaikan User, WorkingDirectory, dan path di bawah bila berbeda
+#   4. sudo cp deploy/monitoring.service /etc/systemd/system/monitoring.service
+#   5. sudo systemctl daemon-reload
+#   6. sudo systemctl enable --now monitoring
+#
+# Lihat status  : sudo systemctl status monitoring
+# Lihat log     : journalctl -u monitoring -f
+
+[Unit]
+Description=Website Content Monitoring System
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Ganti "monitoring" dengan user non-root yang kamu pakai untuk menjalankan app.
+User=monitoring
+Group=monitoring
+
+# Direktori tempat repo berada di server.
+WorkingDirectory=/opt/monitoring
+
+# Konfigurasi lewat environment. Sesuaikan sesuai kebutuhan.
+# Bind ke 127.0.0.1 saja: dashboard TIDAK punya auth, jadi hanya boleh diakses
+# lewat reverse proxy (Nginx) yang menambahkan autentikasi. JANGAN pakai 0.0.0.0
+# kecuali kamu benar-benar paham risikonya.
+Environment=MONITORING_HOST=127.0.0.1
+Environment=MONITORING_PORT=8000
+Environment=MONITORING_DB_PATH=/opt/monitoring/data/monitoring.db
+# Opsional: notifikasi Telegram. Isi kalau mau alert dikirim ke Telegram.
+# Environment=TELEGRAM_BOT_TOKEN=xxxxx
+# Environment=TELEGRAM_CHAT_ID=xxxxx
+
+# Jalankan lewat python di virtualenv.
+ExecStart=/opt/monitoring/.venv/bin/python -m monitoring.main
+
+Restart=on-failure
+RestartSec=5
+
+# --- Hardening dasar (opsional tapi disarankan) ------------------------- #
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+# Izinkan tulis hanya ke direktori data (tempat SQLite).
+ReadWritePaths=/opt/monitoring/data
+
+[Install]
+WantedBy=multi-user.target

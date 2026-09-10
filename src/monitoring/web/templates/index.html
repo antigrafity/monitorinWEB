@@ -1,0 +1,223 @@
+{# Halaman Overview ContentMonitor (Tahap 1): 4 kartu KPI, line chart
+   "Content Changes Over Time" (SVG buatan sendiri), panel "Top Changes
+   Detected", panel "Recent Alerts" (placeholder Tahap 3), dan tabel
+   "Monitored Websites" (maks 5 baris + tautan "Lihat semua website").
+
+   load_error: indikasi kesalahan pemuatan data tanpa mutasi (dipertahankan
+   dari desain lama Req 10.8). #}
+{% extends "base.html" %}
+{% set active_nav = 'overview' %}
+
+{% block title %}Overview &middot; ContentMonitor{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>Overview</h1>
+        <p class="muted small">Ringkasan pemantauan perubahan konten seluruh website.</p>
+    </div>
+    <div class="page-head-actions">
+        <a class="btn btn-primary" href="/websites#add-website-modal">+ Add Website</a>
+    </div>
+</div>
+
+{% if load_error %}
+<div class="error-state" role="alert">
+    Terjadi kesalahan saat memuat data Overview. Data tersimpan tidak diubah.
+    Silakan coba lagi beberapa saat lagi.
+</div>
+{% else %}
+
+{# --- 4 kartu KPI --------------------------------------------------- #}
+<section class="kpi-grid" aria-label="Ringkasan KPI">
+    <div class="kpi-card" data-summary="total">
+        <div class="kpi-icon kpi-icon-indigo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 4 6.1 4 9s-1.5 6.3-4 9c-2.5-2.7-4-6.1-4-9s1.5-6.3 4-9z"/></svg>
+        </div>
+        <div class="kpi-label">Total Websites</div>
+        <div class="kpi-value">{{ total_websites }}</div>
+        <div class="kpi-note muted small">Website yang dipantau</div>
+    </div>
+    <div class="kpi-card" data-summary="pages">
+        <div class="kpi-icon kpi-icon-violet" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
+        </div>
+        <div class="kpi-label">Pages Monitored</div>
+        <div class="kpi-value">{{ pages_monitored }}</div>
+        <div class="kpi-note muted small">Halaman unik terpantau</div>
+    </div>
+    <div class="kpi-card" data-summary="changes">
+        <div class="kpi-icon kpi-icon-indigo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
+        </div>
+        <div class="kpi-label">Changes Detected</div>
+        <div class="kpi-value">{{ changes_this_week }}</div>
+        <div class="kpi-note small">
+            {% if change_pct > 0 %}
+            <span class="trend trend-up">&#8593; {{ change_pct }}%</span>
+            {% elif change_pct < 0 %}
+            <span class="trend trend-down">&#8595; {{ -change_pct }}%</span>
+            {% else %}
+            <span class="trend trend-flat">&mdash; 0%</span>
+            {% endif %}
+            <span class="muted">vs 7 hari sebelumnya</span>
+        </div>
+    </div>
+    <div class="kpi-card" data-summary="alerts">
+        <div class="kpi-icon kpi-icon-violet" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a7 7 0 0 0-7 7v4l-2 4h18l-2-4v-4a7 7 0 0 0-7-7z"/><path d="M9.5 21a2.5 2.5 0 0 0 5 0"/></svg>
+        </div>
+        <div class="kpi-label">Alerts</div>
+        <div class="kpi-value">{{ alerts_needing_attention }}</div>
+        <div class="kpi-note muted small">Perlu perhatian (unread + critical)</div>
+    </div>
+</section>
+
+<div class="overview-grid">
+    {# --- Chart "Content Changes Over Time" -------------------------- #}
+    <section class="card chart-card">
+        <div class="card-title">
+            <h2>Content Changes Over Time</h2>
+            <span class="muted small">7 hari terakhir</span>
+        </div>
+        <div class="chart-wrap">
+            {{ line_chart_svg(chart_labels, chart_counts) }}
+        </div>
+        <div class="chart-legend">
+            <span class="legend-item"><span class="legend-dot legend-total"></span>Total Changes <strong>{{ legend_total }}</strong></span>
+            <span class="legend-item"><span class="legend-dot legend-added"></span>Added <strong>{{ legend_added }}</strong></span>
+            <span class="legend-item"><span class="legend-dot legend-removed"></span>Removed <strong>{{ legend_removed }}</strong></span>
+            <span class="legend-item"><span class="legend-dot legend-updated"></span>Updated <strong>{{ legend_updated }}</strong></span>
+        </div>
+    </section>
+
+    {# --- Panel "Recent Alerts" (ContentMonitor Tahap 3) --------------- #}
+    <section class="card">
+        <div class="card-title">
+            <h2>Recent Alerts</h2>
+            <a class="link-more" href="/alerts">Lihat semua alert &rarr;</a>
+        </div>
+        {% if recent_alerts|length == 0 %}
+        <div class="empty-state small">
+            Belum ada alert.
+        </div>
+        {% else %}
+        <ul class="alert-feed">
+            {% for item in recent_alerts %}
+            {% set alert = item.alert %}
+            <li class="alert-feed-item">
+                <span class="alert-feed-icon severity-{{ alert.severity }}" aria-hidden="true">
+                    {% if alert.severity == 'critical' %}
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+                    {% elif alert.severity == 'warning' %}
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg>
+                    {% else %}
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M12 11v5"/></svg>
+                    {% endif %}
+                </span>
+                <div class="alert-feed-body">
+                    <div class="alert-feed-title">{{ alert.title }}</div>
+                    <div class="alert-feed-detail small">
+                        {{ item.website.domain if item.website else 'Website tidak dikenal' }}
+                        &middot; {{ alert.triggered_at|fmt_rel }}
+                    </div>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </section>
+</div>
+
+{# --- Panel "Top Changes Detected" ------------------------------------ #}
+<section class="card">
+    <div class="card-title">
+        <h2>Top Changes Detected</h2>
+        <a class="link-more" href="/changes">Lihat semua perubahan &rarr;</a>
+    </div>
+    {% if top_changes|length == 0 %}
+    <div class="empty-state">Belum ada perubahan yang terdeteksi.</div>
+    {% else %}
+    <ul class="change-feed">
+        {% for item in top_changes %}
+        <li class="change-feed-item">
+            <span class="avatar" style="background:{{ (item.website.domain if item.website else item.event.url) | avatar_color }}">
+                {{ (item.website.domain if item.website else item.event.url) | avatar_letter }}
+            </span>
+            <div class="change-feed-body">
+                <div class="change-feed-head">
+                    <span class="change-feed-domain">{{ item.website.domain if item.website else 'Website tidak dikenal' }}</span>
+                    <span class="badge badge-{{ item.change_type }}">{{ item.change_type|capitalize }}</span>
+                    <span class="muted small">{{ item.event.detected_at|fmt_rel }}</span>
+                </div>
+                <div class="change-feed-path mono small">{{ item.event.url }}</div>
+                <div class="change-feed-desc small">{{ item.description }}</div>
+            </div>
+            <a class="btn" href="/events/{{ item.event.id }}">Lihat</a>
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</section>
+
+{# --- Tabel "Monitored Websites" (maks 5 baris) ------------------------ #}
+<section class="card">
+    <div class="card-title">
+        <h2>Monitored Websites</h2>
+        <a class="link-more" href="/websites">Lihat semua website &rarr;</a>
+    </div>
+    {% if website_stats_total == 0 %}
+    <div class="empty-state">
+        Belum ada website yang dipantau. Tambahkan domain pertama melalui
+        halaman <a href="/websites#add-website-modal">Websites</a> untuk mulai
+        memantau perubahan kontennya.
+    </div>
+    {% else %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Website</th>
+                    <th scope="col">Pages</th>
+                    <th scope="col">Last Change</th>
+                    <th scope="col">Changes (7D)</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in website_stats %}
+                <tr>
+                    <td>
+                        <div class="site-cell">
+                            <span class="avatar" style="background:{{ item.website.domain|avatar_color }}">{{ item.website.domain|avatar_letter }}</span>
+                            <div>
+                                <div class="site-name"><a href="/websites/{{ item.website.id }}">{{ item.website.name }}</a></div>
+                                <div class="site-domain">{{ item.website.domain }}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>{{ item.pages_count }}</td>
+                    <td>
+                        {% if item.last_change_at %}
+                        {{ item.last_change_at|fmt_rel }}
+                        {% else %}
+                        <span class="never-checked">Belum ada</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ item.daily_counts_7_days|counts_only|sparkline_svg }}</td>
+                    <td>
+                        <span class="status status-{{ item.status_label|lower }}">{{ item.status_label }}</span>
+                    </td>
+                    <td>
+                        <a class="btn" href="/websites/{{ item.website.id }}">Riwayat</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</section>
+{% endif %}
+{% endblock %}
