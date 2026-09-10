@@ -6,6 +6,7 @@ aiosqlite
 fastapi
 jinja2
 uvicorn
+python-multipart
 
 # Development / testing dependencies
 pytest

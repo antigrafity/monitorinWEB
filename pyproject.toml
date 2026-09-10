@@ -16,6 +16,7 @@ dependencies = [
     "fastapi",
     "jinja2",
     "uvicorn",
+    "python-multipart",
 ]
 
 [project.optional-dependencies]
