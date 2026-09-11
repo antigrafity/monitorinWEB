@@ -24,6 +24,7 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "hypothesis",
+    "python-docx",  # untuk scripts/md_to_docx.py (generate manual .docx)
 ]
 
 [tool.setuptools.packages.find]
