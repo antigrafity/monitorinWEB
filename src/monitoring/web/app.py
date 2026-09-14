@@ -104,6 +104,7 @@ from monitoring.infra.repository import (
     CapacityExceededError,
     DuplicateWebsiteError,
 )
+from monitoring.web import auth
 from monitoring.web.charts import (
     avatar_style,
     donut_chart_svg,
@@ -335,6 +336,11 @@ async def _render(
     merged = dict(context)
     merged.setdefault(
         "sidebar_unread_alerts", await _sidebar_unread_alerts_count(repository)
+    )
+    # Username yang sedang login (disematkan oleh middleware auth) agar
+    # sidebar dapat menampilkan info pengguna + tombol logout.
+    merged.setdefault(
+        "current_username", getattr(request.state, "username", None)
     )
     return templates.TemplateResponse(request, name, merged, status_code=status_code)
 
@@ -1070,6 +1076,7 @@ def create_app(
     repository: Any,
     orchestrator: Optional[Any] = None,
     reports_dir: Optional[str] = None,
+    require_auth: bool = True,
 ) -> FastAPI:
     """Buat dan konfigurasikan aplikasi FastAPI Dashboard.
 
@@ -1118,6 +1125,143 @@ def create_app(
     # secara tak terduga (mis. pada test/aplikasi lain yang tidak memakai
     # fitur ini sama sekali).
     app.state.reports_dir = Path(reports_dir or DEFAULT_REPORTS_DIR)
+
+    # --- Autentikasi (fitur login multi-user) ---------------------------- #
+    # ``require_auth`` mengaktifkan gerbang login. Bahkan bila True, gerbang
+    # HANYA berlaku ketika sudah ada minimal satu akun pengguna terdaftar
+    # (lihat middleware di bawah). Dengan begitu:
+    #   - Sebelum user pertama dibuat, dashboard tetap dapat diakses (mencegah
+    #     lock-out saat setup awal) dan seluruh test lama yang memakai DB
+    #     kosong tetap berjalan tanpa perlu login.
+    #   - Begitu admin membuat user pertama (via CLI), gerbang aktif otomatis.
+    app.state.require_auth = require_auth
+    # Secret key untuk menandatangani cookie session. Prioritas: env var
+    # MONITORING_SECRET_KEY; bila tidak ada, pakai/simpan satu di app_config
+    # agar konsisten lintas restart.
+    app.state.secret_key = None  # diisi lazy pada request pertama (butuh await)
+
+    async def _get_secret_key() -> str:
+        """Ambil (atau buat lalu simpan) secret key untuk cookie session."""
+        if app.state.secret_key:
+            return app.state.secret_key
+        key = os.environ.get("MONITORING_SECRET_KEY")
+        if not key:
+            key = await repository.get_app_config("secret_key")
+        if not key:
+            key = auth.generate_secret_key()
+            try:
+                await repository.set_app_config("secret_key", key)
+            except Exception:
+                # Bila gagal menyimpan (mis. repo test tanpa app_config),
+                # tetap pakai key di memori untuk sesi berjalan.
+                pass
+        app.state.secret_key = key
+        return key
+
+    app.state.get_secret_key = _get_secret_key
+
+    async def _current_user(request: Request) -> Optional[str]:
+        """Kembalikan username dari cookie session yang valid, atau None."""
+        token = request.cookies.get(auth.SESSION_COOKIE_NAME)
+        if not token:
+            return None
+        secret = await _get_secret_key()
+        return auth.verify_session_token(token, secret)
+
+    @app.middleware("http")
+    async def _auth_gate(request: Request, call_next):
+        """Blokir akses ke halaman bila belum login (bila gerbang aktif).
+
+        Gerbang dilewati untuk: aplikasi tanpa require_auth, path publik
+        (/login, /logout, /static), dan ketika belum ada user terdaftar.
+        """
+        path = request.url.path
+        public = (
+            path == "/login"
+            or path == "/logout"
+            or path.startswith("/static")
+        )
+        if not app.state.require_auth or public:
+            return await call_next(request)
+
+        # Gerbang hanya aktif bila sudah ada minimal satu akun.
+        try:
+            has_users = await repository.count_users() > 0
+        except Exception:
+            has_users = False
+        if not has_users:
+            return await call_next(request)
+
+        username = await _current_user(request)
+        if username is None:
+            nxt = request.url.path
+            if request.url.query:
+                nxt += "?" + request.url.query
+            from urllib.parse import quote
+
+            return RedirectResponse(
+                url="/login?next=" + quote(nxt, safe=""),
+                status_code=HTTP_SEE_OTHER,
+            )
+        # Sematkan username agar template/rute lain bisa memakainya.
+        request.state.username = username
+        return await call_next(request)
+
+    @app.get("/login", response_class=HTMLResponse)
+    async def login_page(request: Request, next: Optional[str] = None) -> HTMLResponse:
+        """Tampilkan formulir login. Bila sudah login, alihkan ke tujuan."""
+        if await _current_user(request) is not None:
+            return RedirectResponse(
+                url=_safe_redirect_target(next, "/"), status_code=HTTP_SEE_OTHER
+            )
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            {"error": None, "next": next or "", "username": ""},
+        )
+
+    @app.post("/login", response_class=HTMLResponse)
+    async def login_submit(
+        request: Request,
+        username: str = Form(...),
+        password: str = Form(...),
+        next: Optional[str] = Form(None),
+    ) -> Any:
+        """Proses login: verifikasi kredensial, set cookie session bila cocok."""
+        user = await repository.get_user_by_username(username.strip())
+        ok = user is not None and auth.verify_password(password, user.password_hash)
+        if not ok:
+            return templates.TemplateResponse(
+                request,
+                "login.html",
+                {
+                    "error": "Username atau password salah.",
+                    "next": next or "",
+                    "username": username,
+                },
+                status_code=HTTP_BAD_REQUEST,
+            )
+        secret = await _get_secret_key()
+        token = auth.create_session_token(user.username, secret)
+        response = RedirectResponse(
+            url=_safe_redirect_target(next, "/"), status_code=HTTP_SEE_OTHER
+        )
+        response.set_cookie(
+            auth.SESSION_COOKIE_NAME,
+            token,
+            max_age=auth.SESSION_MAX_AGE_SECONDS,
+            httponly=True,
+            samesite="lax",
+        )
+        return response
+
+    @app.get("/logout")
+    @app.post("/logout")
+    async def logout(request: Request) -> RedirectResponse:
+        """Hapus cookie session lalu alihkan ke halaman login."""
+        response = RedirectResponse(url="/login", status_code=HTTP_SEE_OTHER)
+        response.delete_cookie(auth.SESSION_COOKIE_NAME)
+        return response
 
     @app.get("/", response_class=HTMLResponse)
     async def overview(request: Request) -> HTMLResponse:

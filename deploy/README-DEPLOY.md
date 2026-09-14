@@ -138,6 +138,38 @@ docker stop monitoring
 | `MONITORING_DB_PATH`  | `monitoring.db`    | Path file SQLite. Pakai path absolut di server. |
 | `TELEGRAM_BOT_TOKEN`  | (kosong)           | Token bot; kalau kosong notifikasi dimatikan. |
 | `TELEGRAM_CHAT_ID`    | (kosong)           | Chat/channel tujuan notifikasi.              |
+| `MONITORING_SECRET_KEY` | (auto)           | Kunci penanda cookie login. Bila kosong, dibuat otomatis & disimpan di DB. Set manual bila ingin konsisten lintas re-install. |
+
+---
+
+## Login dashboard (akun pengguna)
+
+Dashboard punya gerbang login. **Gerbang aktif otomatis begitu ada minimal
+satu akun.** Sebelum akun pertama dibuat, dashboard tetap terbuka (agar tidak
+terkunci saat setup).
+
+Kelola akun lewat CLI (password diketik interaktif, tidak terlihat):
+
+```bash
+# systemd (jalankan sebagai user aplikasi, dari folder repo)
+cd /opt/monitoring
+.venv/bin/python -m monitoring.usertool add admin       # buat akun
+.venv/bin/python -m monitoring.usertool list            # daftar akun
+.venv/bin/python -m monitoring.usertool passwd admin    # ganti password
+.venv/bin/python -m monitoring.usertool remove budi     # hapus akun
+
+# docker
+docker exec -it monitoring python -m monitoring.usertool add admin
+```
+
+> Setelah membuat akun pertama, buka dashboard — kamu akan diminta login.
+> Untuk menambah anggota tim, cukup buat akun baru (`usertool add <nama>`).
+> Akun terakhir tidak bisa dihapus (mencegah terkunci dari dashboard).
+
+Karena login menandatangani cookie dengan secret key, disarankan set
+`MONITORING_SECRET_KEY` yang tetap (mis. di file service) supaya sesi login
+tidak invalid saat aplikasi di-install ulang. Kalau tidak diset, key dibuat
+otomatis dan disimpan di database — aman untuk pemakaian biasa.
 
 ---
 

@@ -78,6 +78,16 @@
                 </a>
             </nav>
             <div class="sidebar-footer">
+                {% if current_username %}
+                <div class="sidebar-user">
+                    <span class="avatar" style="background:{{ current_username|avatar_color }}">{{ current_username|avatar_letter }}</span>
+                    <span class="sidebar-user-name">{{ current_username }}</span>
+                </div>
+                <form method="post" action="/logout" class="logout-form">
+                    <button type="submit" class="btn logout-btn">Keluar</button>
+                </form>
+                <hr style="border:none;border-top:1px solid var(--border);margin:var(--space-3) 0;">
+                {% endif %}
                 Interval global bawaan<br>
                 <strong>{{ global_interval_label }}</strong>
             </div>

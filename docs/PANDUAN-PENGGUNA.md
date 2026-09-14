@@ -54,6 +54,21 @@ Buka browser lalu ketik alamat berikut:
 > Aplikasi berjalan 24/7 di server. Kamu tidak perlu menyalakan apa pun;
 > cukup buka alamatnya.
 
+### Masuk (login)
+
+Dashboard dilindungi login. Saat membuka alamatnya, kamu akan diarahkan ke
+halaman **Masuk**. Isi username dan password yang diberikan admin, lalu klik
+**Masuk**.
+
+- Setelah berhasil, kamu tetap masuk selama beberapa hari (tidak perlu login
+  ulang tiap buka), kecuali kamu menekan **Keluar**.
+- Tombol **Keluar** ada di kiri bawah (pojok sidebar), di bawah nama akunmu.
+- Lupa password? Minta admin mengganti password akunmu (lihat panduan deploy
+  untuk perintahnya).
+
+> Admin membuat akun lewat command line di server. Tiap anggota tim sebaiknya
+> punya akun sendiri.
+
 ---
 
 ## 3. Sekilas tampilan & menu
@@ -301,6 +316,14 @@ Minimal 10, maksimal 100 situs sekaligus.
 **Situs yang butuh JavaScript berat bisa dipantau?**
 Versi ini dirancang untuk situs HTML statis (company profile). Situs yang
 sangat bergantung pada JavaScript mungkin tidak terbaca sempurna.
+
+**Bagaimana cara menambah akun untuk anggota tim baru?**
+Admin membuat akun lewat command line di server (`usertool add <nama>`). Tiap
+orang sebaiknya punya akun sendiri. Lihat panduan deploy untuk detailnya.
+
+**Saya lupa password, bagaimana?**
+Minta admin mereset lewat perintah `usertool passwd <username>` di server.
+Tidak ada reset password mandiri lewat halaman web pada versi ini.
 
 ---
 

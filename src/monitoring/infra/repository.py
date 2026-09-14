@@ -27,6 +27,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
+from uuid import uuid4
 
 import aiosqlite
 
@@ -97,6 +98,40 @@ class CapacityExceededError(Exception):
             f"Kapasitas maksimum {max_websites} Monitored_Website telah "
             "tercapai; penambahan ditolak."
         )
+
+
+class DuplicateUserError(Exception):
+    """Diangkat ketika username akun yang ditambahkan sudah terdaftar."""
+
+    def __init__(self, username: str) -> None:
+        self.username = username
+        super().__init__(
+            f"Pengguna '{username}' sudah terdaftar; entri duplikat ditolak."
+        )
+
+
+@dataclass(frozen=True)
+class AppUser:
+    """Akun pengguna dashboard (fitur login multi-user).
+
+    ``password_hash`` menyimpan hash PBKDF2 (lihat ``monitoring.web.auth``),
+    BUKAN password mentah.
+    """
+
+    id: str
+    username: str
+    password_hash: str
+    created_at: datetime
+
+
+def _row_to_user(row: Tuple) -> AppUser:
+    """Petakan baris ``app_user`` menjadi :class:`AppUser`."""
+    return AppUser(
+        id=row[0],
+        username=row[1],
+        password_hash=row[2],
+        created_at=datetime.fromisoformat(row[3]),
+    )
 
 
 @dataclass(frozen=True)
@@ -388,6 +423,18 @@ _SCHEMA_STATEMENTS = (
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_report_created ON report(created_at DESC)",
+    # Akun pengguna dashboard (fitur login multi-user). Tabel baru -> cukup
+    # CREATE TABLE IF NOT EXISTS meski basis data lama sudah berisi data nyata.
+    # Password TIDAK pernah disimpan mentah; hanya hash PBKDF2 (lihat
+    # monitoring.web.auth).
+    """
+    CREATE TABLE IF NOT EXISTS app_user (
+        id TEXT PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )
+    """,
 )
 
 
@@ -2287,6 +2334,95 @@ class Repository:
         if row is None:
             return None
         return row[0]
+
+    # --- Akun pengguna dashboard (fitur login multi-user) ---------------- #
+
+    async def add_user(
+        self, username: str, password_hash: str
+    ) -> "AppUser":
+        """Buat akun pengguna baru dengan ``password_hash`` yang sudah dihitung.
+
+        Pemanggil bertanggung jawab menghasilkan ``password_hash`` (lihat
+        ``monitoring.web.auth.hash_password``); repository TIDAK pernah
+        menyentuh password mentah. Username unik (case-sensitive di level DB
+        via batasan UNIQUE); duplikat mengangkat :class:`DuplicateUserError`.
+        """
+        conn = self._require_conn()
+        user = AppUser(
+            id=str(uuid4()),
+            username=username,
+            password_hash=password_hash,
+            created_at=datetime.now(),
+        )
+        async with self._write_lock:
+            async with conn.execute(
+                "SELECT 1 FROM app_user WHERE username = ?", (username,)
+            ) as cur:
+                if await cur.fetchone() is not None:
+                    raise DuplicateUserError(username)
+            await conn.execute(
+                "INSERT INTO app_user (id, username, password_hash, created_at) "
+                "VALUES (?, ?, ?, ?)",
+                (
+                    user.id,
+                    user.username,
+                    user.password_hash,
+                    user.created_at.isoformat(),
+                ),
+            )
+            await conn.commit()
+        return user
+
+    async def get_user_by_username(self, username: str) -> Optional["AppUser"]:
+        """Ambil akun pengguna berdasarkan username; ``None`` bila tidak ada."""
+        conn = self._require_conn()
+        async with conn.execute(
+            "SELECT id, username, password_hash, created_at "
+            "FROM app_user WHERE username = ?",
+            (username,),
+        ) as cursor:
+            row = await cursor.fetchone()
+        return _row_to_user(row) if row is not None else None
+
+    async def list_users(self) -> List["AppUser"]:
+        """Kembalikan seluruh akun pengguna terurut berdasarkan username."""
+        conn = self._require_conn()
+        async with conn.execute(
+            "SELECT id, username, password_hash, created_at "
+            "FROM app_user ORDER BY username"
+        ) as cursor:
+            rows = await cursor.fetchall()
+        return [_row_to_user(row) for row in rows]
+
+    async def count_users(self) -> int:
+        """Hitung jumlah akun pengguna terdaftar."""
+        conn = self._require_conn()
+        async with conn.execute("SELECT COUNT(*) FROM app_user") as cursor:
+            row = await cursor.fetchone()
+        return int(row[0]) if row else 0
+
+    async def remove_user(self, username: str) -> bool:
+        """Hapus akun pengguna; kembalikan ``True`` bila ada yang terhapus."""
+        conn = self._require_conn()
+        async with self._write_lock:
+            cursor = await conn.execute(
+                "DELETE FROM app_user WHERE username = ?", (username,)
+            )
+            await conn.commit()
+            return cursor.rowcount > 0
+
+    async def update_user_password(
+        self, username: str, password_hash: str
+    ) -> bool:
+        """Perbarui hash password akun; ``True`` bila akun ditemukan & diubah."""
+        conn = self._require_conn()
+        async with self._write_lock:
+            cursor = await conn.execute(
+                "UPDATE app_user SET password_hash = ? WHERE username = ?",
+                (password_hash, username),
+            )
+            await conn.commit()
+            return cursor.rowcount > 0
 
     # --- Protokol async context manager ---
 

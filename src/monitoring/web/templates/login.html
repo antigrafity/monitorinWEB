@@ -1,0 +1,43 @@
+{# Halaman login dashboard (fitur login multi-user).
+
+   Berdiri sendiri (tanpa sidebar base.html) karena diakses sebelum
+   terautentikasi. Memakai stylesheet yang sama (/static/style.css) agar
+   tampilannya konsisten dengan dashboard. #}
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Masuk &middot; ContentMonitor</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="login-wrap">
+        <div class="login-card card">
+            <div class="login-brand">
+                <span class="brand-mark" aria-hidden="true">CM</span>
+                <span>ContentMonitor</span>
+            </div>
+            <h1 class="login-title">Masuk ke Dashboard</h1>
+            <p class="muted small login-sub">Silakan masuk untuk melanjutkan.</p>
+
+            {% if error %}
+            <div class="error-state" role="alert">{{ error }}</div>
+            {% endif %}
+
+            <form method="post" action="/login" class="login-form">
+                <input type="hidden" name="next" value="{{ next }}">
+                <label class="field">Username
+                    <input type="text" name="username" value="{{ username }}"
+                           autocomplete="username" autofocus required>
+                </label>
+                <label class="field">Password
+                    <input type="password" name="password"
+                           autocomplete="current-password" required>
+                </label>
+                <button type="submit" class="btn btn-primary login-btn">Masuk</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

@@ -1231,3 +1231,46 @@ details.edit-panel[open] > summary { background: var(--accent-soft); color: var(
     .summary-card .value { font-size: 1.4rem; }
     .form-row { flex-direction: column; }
 }
+
+/* --- Halaman login (fitur login multi-user) ---------------------------- */
+.login-wrap {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-5);
+    background: var(--bg);
+}
+.login-card {
+    width: 100%;
+    max-width: 380px;
+    margin: 0;
+}
+.login-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin-bottom: var(--space-4);
+}
+.login-title { margin: 0 0 var(--space-1); }
+.login-sub { margin-bottom: var(--space-4); }
+.login-form { display: flex; flex-direction: column; gap: var(--space-3); }
+.login-btn { justify-content: center; margin-top: var(--space-2); }
+
+/* Info pengguna & tombol logout pada sidebar footer. */
+.sidebar-user {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+}
+.sidebar-user .avatar { width: 26px; height: 26px; font-size: 0.72rem; }
+.sidebar-user-name { font-weight: 600; font-size: 0.82rem; }
+.logout-form { margin: 0; }
+.logout-btn {
+    width: 100%;
+    justify-content: center;
+    font-size: 0.82rem;
+}
